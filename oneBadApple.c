@@ -3,7 +3,7 @@
  * oneBadApple.c
  * CIS 451 Project 1 (F25)
  *
- * !!! Name(s) !!!
+ * Elijah Morgan & Emily Heyboer
  *************************************************************/
 #include <stdio.h>
 #include <stdlib.h>
