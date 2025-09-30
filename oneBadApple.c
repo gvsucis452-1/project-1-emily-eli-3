@@ -10,64 +10,162 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdint.h>
-#include <stdbool.h> // Wish I knew about this before...
+#include <stdbool.h>    // Wish I knew about this before...
+#include <sys/types.h>  // Mostly for pid_t
+#define MAX_MSG_LEN 1024
+#define MSG_CONTENT_LEN MAX_MSG_LEN - 4
+#define MAX_NODES 1000 // Lets not crash our PC lol.
+/*NOTE - Message Format ==================================
+byte  |     definition
+----------------------------------------------------------
+0-3   |     INT - Recipient Node ID
+4-1024|     PTR - Message ptr
+==========================================================*/
+/*NOTE - Special Messages =================================
+[ID] | C^   - Graceful shutdown of ring. Not implemented yet.
+[ID] | PING - Ring health check, should reach HEAD. Not implemented yet, optional.
+==========================================================*/
 
-struct Node {
-    uint64_t id;
-    char *data;
-    struct Node *next;
+struct Message {
+    int recipientId;
+    char content[MAX_MSG_LEN - sizeof(int)];
+    //ssize_t length; // Does nothing rn, but putting this in for future use
 };
 
-/*
-// Forgot, this has to be a process, not a struct.
-// Use the recursive idea tho.
+int msgLoop(const int PREV_READ_PIPE, const int NEXT_WRITE_PIPE, const int nodeId) {
+    struct Message *msg = malloc(sizeof(struct Message));
+    ssize_t msgLen; //NOTE Remove this if we start using Message->length
+    const pid_t pid = getpid();
 
-// Recursively initialize a linked list of nodes. Last node points to N0.
-struct Node* initNodeRing(struct Node *firstNode, uint64_t id, uint64_t maxId) {
-    if (id > maxId) {
-        return firstNode;
-    }
-    
-    struct Node *newNode = malloc(sizeof(struct Node));
-    if (newNode == NULL) {
-        fprintf(stderr, "Memory allocation failed\n");
+    if (msg == NULL) {
+        perror("Malloc failed!\n");
         return 1;
     }
-    newNode->id = id;
-    newNode->data = NULL;
-    newNode->next = initNode(id + 1, maxId);
-    printf("Initialized node: %lu\n", id);
-    return newNode;
-}
 
-// Freeing memory works in the same recursive way.
-void freeNodeRing(struct Node *head) {
-    struct Node *current = head;
-    struct Node *nextNode;
+    while (PREV_READ_PIPE != -1)
+    {
+        msgLen = read(PREV_READ_PIPE, msg, MAX_MSG_LEN);
+        if (msgLen == -1) {
+            // TODO: Differentiate between dead nodes and gracefully shutting down the ring.
+            perror("Read failed, previous node dead or detached, exiting...\n");
+            free(msg);
+            close(PREV_READ_PIPE);
+            close(NEXT_WRITE_PIPE); //FIXME Replace with graceful shutdown msg and send kill() to next node
+            exit(1); // BUG FIX: Use exit() instead of kill() for self-termination
+        }
+        
+        if (msgLen < sizeof(int) || msg->recipientId < 1 || msg->recipientId > MAX_NODES) {
+            printf("Node %d (PID: %d): Malformed or partial message, ignoring...\n", nodeId, pid);
+            continue;
+        }
+        
+        // Check if msg is for this node
+        if (nodeId == msg->recipientId) {
+            printf("Message at Node %d (PID: %d) received: %s\n", nodeId, pid, msg->content);
+        } else {
+            printf("Node %d (PID: %d) passing message to node %d.\n", nodeId, pid, msg->recipientId);
+            // TODO: Forward message to next node in ring
+            write(NEXT_WRITE_PIPE, msg, MAX_MSG_LEN);
+        }
+    };
+    
+    free(msg);
+    printf("Node PID: %d gracefully killed\n", pid);
+    return 0;
+};
 
-    if (head == NULL) return;
+void initNode(int k, int id, const int PREV_READ_PIPE, const int HEAD_WRITER) {
+    // Init new pipe
+    int nodePipe[2];
+    if (pipe(nodePipe) == -1) {
+        perror("Init pipe failure!\n");
+        exit(1);
+    }
 
-    do {
-        nextNode = current->next;
-        free(current);
-        current = nextNode;
-    } while (current != head);
-}
-*/
+    printf("Node %d (PID: %d) initialized. Read pipe: %d, Write pipe: %d\n", id, getpid(), PREV_READ_PIPE, nodePipe[1]);
+    // Check if this is the last node in the ring, N(k)
+    if (k == id) {
+        printf("REMEMBER: read & write pipes should always be 3 apart. This is normal.\n");
+        printf("Node %d (PID: %d) is the kth node, looping pipe to head: %d\n", id, getpid(), HEAD_WRITER);
+        close(nodePipe[1]);
+        msgLoop(PREV_READ_PIPE, HEAD_WRITER, id);
+    // Else Create N(id + 1)
+    } else {
+        pid_t child_pid = fork();
+        if (child_pid == -1) {
+            perror("Fork failed!\n");
+            exit(1);
+        } else if (child_pid == 0) {
+            // Child recursively starts as next node
+            initNode(k, id + 1, nodePipe[0], HEAD_WRITER);
+        }
+        // Parent continues
+        msgLoop(PREV_READ_PIPE, nodePipe[1], id);
+    }
+    // Cleanup
+    close(PREV_READ_PIPE);
+    exit(0);
+};
+
+
+int initRing(int k) {
+    // Init pipe
+    int nodePipe[2];
+    if (pipe(nodePipe) == -1) {
+        perror("Init pipe failure!\n");
+        exit(1);
+    }
+    const int HEAD_READER = nodePipe[0];
+    const int HEAD_WRITER = nodePipe[1];
+    
+    const pid_t child_pid = fork();
+    if (child_pid == -1) {
+        perror("Fork failed!\n");
+        exit(1);
+    } else if (child_pid == 0) {
+        initNode(k, 1, HEAD_READER, HEAD_WRITER); // id = 1 since this is the 2nd Node, not 1st
+    }
+    // Parent continues
+    return nodePipe[1];
+};
 
 int main(int argc, char *argv[]) {
-    int64_t k = argv[1];
-
-    // Manually initialize the HEAD node.
-    struct Node *head = malloc(sizeof(struct Node));
-    if (head == NULL) {
-        fprintf(stderr, "Memory allocation failed\n");
-        return 1;
+    if (argc != 2) {
+        fprintf(stderr, "Usage: ./oneBadApple <num_nodes>\n");
+        exit(1);
     }
-    head->id = 0;
-    // This may take a while...
-    head->next = initNodeRing(head, 1, k);
+    // Convert string argument to integer for number of nodes
+    const int nodes = atoi(argv[1]);
+    if (nodes < 1 || nodes > MAX_NODES) {
+        perror("Error: Number of nodes must be between 1 and 1000\n");
+        exit(1);
+    }
+    const int HEAD_PIPE = initRing(nodes);
+    struct Message *msg = malloc(sizeof(struct Message));
 
+    if (msg == NULL) {
+        perror("Malloc failed!\n");
+        exit(1);
+    }
 
+    char *buffer = malloc(sizeof(struct Message));
+
+    if (buffer == NULL) {
+        perror("Malloc failed!\n");
+        exit(1);
+    }
+    
+    while (true) {
+        printf("Enter message as [ID][MSG]: ");
+        fgets(buffer, sizeof(struct Message), stdin);
+        write(HEAD_PIPE, buffer, MAX_MSG_LEN);
+        memcpy(&msg->recipientId, buffer, sizeof(int));
+        memcpy(&msg->content, buffer + sizeof(int), sizeof(buffer) - sizeof(int));
+        memset(buffer, 0, sizeof(struct Message)); // Clear input buffer
+        printf("Bad input, please try again.\n");
+        //TODO: Read user input and send messages into the ring at headPipe. Format messages per spec.
+    }
+    free(msg);
+    free(buffer);
     return 0;
 }
