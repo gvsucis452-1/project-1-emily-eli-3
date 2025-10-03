@@ -10,7 +10,6 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdint.h>
-#include <stdbool.h>    // Wish I knew about this before...
 #include <sys/types.h>  // Mostly for pid_t
 #define MAX_MSG_LEN 1024
 #define MSG_CONTENT_LEN MAX_MSG_LEN - 4
@@ -155,7 +154,7 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
     
-    while (true) {
+    while (1) {
         printf("Enter message as [ID][MSG]: ");
         fgets(buffer, sizeof(struct Message), stdin);
         write(HEAD_PIPE, buffer, MAX_MSG_LEN);
