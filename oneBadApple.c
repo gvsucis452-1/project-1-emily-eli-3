@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <stdbool.h>    // Wish I knew about this before...
 #include <sys/types.h>  // Mostly for pid_t
+#include <signal.h>
 #define MAX_MSG_LEN 1024
 #define MSG_CONTENT_LEN MAX_MSG_LEN - 4
 #define MAX_NODES 1000 // Lets not crash our PC lol.
@@ -25,6 +26,11 @@ byte  |     definition
 [ID] | C^   - Graceful shutdown of ring. Not implemented yet.
 [ID] | PING - Ring health check, should reach HEAD. Not implemented yet, optional.
 ==========================================================*/
+pid_t nextNode;
+int nodeId;
+struct Message *msg;
+int PREV_READ_PIPE;
+int NEXT_WRITE_PIPE;
 
 struct Message {
     int recipientId;
@@ -32,26 +38,33 @@ struct Message {
     //ssize_t length; // Does nothing rn, but putting this in for future use
 };
 
-int msgLoop(const int PREV_READ_PIPE, const int NEXT_WRITE_PIPE, const int nodeId) {
+void shutdown() {
+    printf("Node %d (PID: %d) Shutting down...\n", nodeId, getpid());
+    free(msg);
+    close(PREV_READ_PIPE);
+    close(NEXT_WRITE_PIPE);
+    exit(0);
+}
+
+int msgLoop(const int PREV_READ_PIPE, const int NEXT_WRITE_PIPE) {
     struct Message *msg = malloc(sizeof(struct Message));
     ssize_t msgLen; //NOTE Remove this if we start using Message->length
     const pid_t pid = getpid();
+
+    signal(SIGINT, shutdown);
 
     if (msg == NULL) {
         perror("Malloc failed!\n");
         return 1;
     }
 
-    while (PREV_READ_PIPE != -1)
+    while (1)
     {
         msgLen = read(PREV_READ_PIPE, msg, MAX_MSG_LEN);
         if (msgLen == -1) {
             // TODO: Differentiate between dead nodes and gracefully shutting down the ring.
             perror("Read failed, previous node dead or detached, exiting...\n");
-            free(msg);
-            close(PREV_READ_PIPE);
-            close(NEXT_WRITE_PIPE); //FIXME Replace with graceful shutdown msg and send kill() to next node
-            exit(1); // BUG FIX: Use exit() instead of kill() for self-termination
+            shutdown();
         }
         
         if (msgLen < sizeof(int) || msg->recipientId < 1 || msg->recipientId > MAX_NODES) {
@@ -68,10 +81,6 @@ int msgLoop(const int PREV_READ_PIPE, const int NEXT_WRITE_PIPE, const int nodeI
             write(NEXT_WRITE_PIPE, msg, MAX_MSG_LEN);
         }
     };
-    
-    free(msg);
-    printf("Node PID: %d gracefully killed\n", pid);
-    return 0;
 };
 
 void initNode(int k, int id, const int PREV_READ_PIPE, const int HEAD_WRITER) {
@@ -82,25 +91,27 @@ void initNode(int k, int id, const int PREV_READ_PIPE, const int HEAD_WRITER) {
         exit(1);
     }
 
+    nodeId = id;
+
     printf("Node %d (PID: %d) initialized. Read pipe: %d, Write pipe: %d\n", id, getpid(), PREV_READ_PIPE, nodePipe[1]);
     // Check if this is the last node in the ring, N(k)
     if (k == id) {
         printf("REMEMBER: read & write pipes should always be 3 apart. This is normal.\n");
         printf("Node %d (PID: %d) is the kth node, looping pipe to head: %d\n", id, getpid(), HEAD_WRITER);
         close(nodePipe[1]);
-        msgLoop(PREV_READ_PIPE, HEAD_WRITER, id);
+        msgLoop(PREV_READ_PIPE, HEAD_WRITER);
     // Else Create N(id + 1)
     } else {
-        pid_t child_pid = fork();
-        if (child_pid == -1) {
+        nextNode = fork();
+        if (nextNode == -1) {
             perror("Fork failed!\n");
             exit(1);
-        } else if (child_pid == 0) {
+        } else if (nextNode == 0) {
             // Child recursively starts as next node
             initNode(k, id + 1, nodePipe[0], HEAD_WRITER);
         }
         // Parent continues
-        msgLoop(PREV_READ_PIPE, nodePipe[1], id);
+        msgLoop(PREV_READ_PIPE, nodePipe[1]);
     }
     // Cleanup
     close(PREV_READ_PIPE);
@@ -118,11 +129,11 @@ int initRing(int k) {
     const int HEAD_READER = nodePipe[0];
     const int HEAD_WRITER = nodePipe[1];
     
-    const pid_t child_pid = fork();
-    if (child_pid == -1) {
+    nextNode = fork();
+    if (nextNode == -1) {
         perror("Fork failed!\n");
         exit(1);
-    } else if (child_pid == 0) {
+    } else if (nextNode == 0) {
         initNode(k, 1, HEAD_READER, HEAD_WRITER); // id = 1 since this is the 2nd Node, not 1st
     }
     // Parent continues
@@ -154,6 +165,8 @@ int main(int argc, char *argv[]) {
         perror("Malloc failed!\n");
         exit(1);
     }
+
+    signal(SIGINT, shutdown);
     
     while (true) {
         printf("Enter message as [ID][MSG]: ");
