@@ -8,9 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <string.h>
 #include <stdint.h>
-#include <stdbool.h>    // Wish I knew about this before...
 #include <sys/types.h>  // Mostly for pid_t
 #include <signal.h>
 #define MAX_MSG_LEN 1024
@@ -96,7 +94,7 @@ void initNode(int k, int id, const int PREV_READ_PIPE, const int HEAD_WRITER) {
     printf("Node %d (PID: %d) initialized. Read pipe: %d, Write pipe: %d\n", id, getpid(), PREV_READ_PIPE, nodePipe[1]);
     // Check if this is the last node in the ring, N(k)
     if (k == id) {
-        printf("REMEMBER: read & write pipes should always be 3 apart. This is normal.\n");
+        //printf("REMEMBER: read & write pipes should always be 3 apart. This is normal.\n");
         printf("Node %d (PID: %d) is the kth node, looping pipe to head: %d\n", id, getpid(), HEAD_WRITER);
         close(nodePipe[1]);
         msgLoop(PREV_READ_PIPE, HEAD_WRITER);
@@ -148,7 +146,7 @@ int main(int argc, char *argv[]) {
     // Convert string argument to integer for number of nodes
     const int nodes = atoi(argv[1]);
     if (nodes < 1 || nodes > MAX_NODES) {
-        perror("Error: Number of nodes must be between 1 and 1000\n");
+        perror("Error: Number of nodes must be 1-1000\n");
         exit(1);
     }
     const int HEAD_PIPE = initRing(nodes);
@@ -168,15 +166,31 @@ int main(int argc, char *argv[]) {
 
     signal(SIGINT, shutdown);
     
-    while (true) {
-        printf("Enter message as [ID][MSG]: ");
-        fgets(buffer, sizeof(struct Message), stdin);
-        write(HEAD_PIPE, buffer, MAX_MSG_LEN);
-        memcpy(&msg->recipientId, buffer, sizeof(int));
-        memcpy(&msg->content, buffer + sizeof(int), sizeof(buffer) - sizeof(int));
-        memset(buffer, 0, sizeof(struct Message)); // Clear input buffer
-        printf("Bad input, please try again.\n");
-        //TODO: Read user input and send messages into the ring at headPipe. Format messages per spec.
+    while (1) {
+        printf("Enter message as [ID][MSG]:\n>");
+        if (fgets(buffer, MAX_MSG_LEN, stdin) == NULL) {
+            printf("Failed buffer write. Exiting.\n");
+            break;
+        }
+
+        switch (sscanf(buffer, "%d %[^\n]", &msg->recipientId, msg->content))
+        {
+        case 0:
+            printf("Invalid message, use [ID][MSG]\n");
+            continue;
+        case 1:
+            printf("Please include both [ID] & [MSG]\n");
+            continue;
+        default:
+            break;
+        }
+        
+        if (msg->recipientId < 1 || msg->recipientId > nodes) {
+            printf("Bad ID value, please choose a value between 1-%d\n", nodes);
+            continue;
+        }
+        
+        write(HEAD_PIPE, msg, MAX_MSG_LEN);
     }
     free(msg);
     free(buffer);
