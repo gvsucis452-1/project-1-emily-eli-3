@@ -13,7 +13,7 @@
 #include <signal.h>
 #define MAX_MSG_LEN 1024
 #define MSG_CONTENT_LEN MAX_MSG_LEN - 4
-#define MAX_NODES 1000 // Lets not crash our PC lol.
+#define MAX_NODES 100 // Lets not crash our PC lol.
 /*NOTE - Message Format ==================================
 byte  |     definition
 ----------------------------------------------------------
@@ -192,7 +192,7 @@ int main(int argc, char *argv[]) {
     // Convert string argument to integer for number of nodes
     const int nodes = atoi(argv[1]);
     if (nodes < 1 || nodes > MAX_NODES) {
-        perror("Error: Number of nodes must be 1-1000\n");
+        fprintf(stderr, "Error: Number of nodes must be 1-%d\n", MAX_NODES);
         exit(1);
     }
 
