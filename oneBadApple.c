@@ -113,17 +113,17 @@ void input_loop(const int PREV_READ_PIPE, const int NEXT_WRITE_PIPE, int k_nodes
         switch (sscanf(buffer, "%d %[^\n]", &msg->recipient_id, msg->content))
         {
         case 0:
-            printf("Invalid message, use [ID] [MSG]\n");
-            continue;
         case 1:
-            printf("Please include both [ID] & [MSG]\n");
+            printf("Please use the format [ID] [MSG]\n");
+            printf("For example: '%d this is an example message'\n", k_nodes);
             continue;
         default:
             break;
         }
         
         if (msg->recipient_id < 1 || msg->recipient_id > k_nodes) {
-            printf("Bad ID value, please choose a value between 1-%d\n", k_nodes);
+            printf("ID should be value between 1 and %d\n", k_nodes);
+            printf("For example: '%d %s'\n", k_nodes, msg->content);
             continue;
         }
         
@@ -187,14 +187,16 @@ void init_ring(int k) {
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {
-        fprintf(stderr, "Usage: ./oneBadApple <num_nodes>\n");
+        fprintf(stderr, "Usage: %s <num_nodes>\n", argv[0]);
+        fprintf(stderr, "For example: '%s %d'\n", argv[0], MAX_NODES);
         exit(1);
     }
 
     // Convert string argument to integer for number of nodes
     const int nodes = atoi(argv[1]);
     if (nodes < 1 || nodes > MAX_NODES) {
-        fprintf(stderr, "Error: Number of nodes must be 1-%d\n", MAX_NODES);
+        fprintf(stderr, "Number of nodes should be between 1 and %d\n", MAX_NODES);
+        fprintf(stderr, "For example: '%s %d'\n", argv[0], MAX_NODES);
         exit(1);
     }
 
