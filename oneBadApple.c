@@ -20,29 +20,29 @@ byte  |     definition
 0-3   |     INT - Recipient Node ID
 4-1024|     PTR - Message ptr
 ==========================================================*/
-pid_t nextNode;
-int nodeId;
+pid_t next_node;
+int node_id;
 struct Message *msg;
 int PREV_READ_PIPE;
 int NEXT_WRITE_PIPE;
 
 struct Message {
-    int recipientId;
+    int recipient_id;
     char content[MAX_MSG_LEN - sizeof(int)];
     //ssize_t length; // Does nothing rn, but putting this in for future use
 };
 
 void shutdown() {
-    printf("Node %d (PID: %d) Shutting down...\n", nodeId, getpid());
+    printf("Node %d (PID: %d) Shutting down...\n", node_id, getpid());
     free(msg);
     close(PREV_READ_PIPE);
     close(NEXT_WRITE_PIPE);
     exit(0);
 }
 
-void msgLoop(const int PREV_READ_PIPE, const int NEXT_WRITE_PIPE) {
+void msg_loop(const int PREV_READ_PIPE, const int NEXT_WRITE_PIPE) {
     msg = malloc(sizeof(struct Message));
-    ssize_t msgLen; //NOTE Remove this if we start using Message->length
+    ssize_t msg_len; //NOTE Remove this if we start using Message->length
     const pid_t pid = getpid();
 
     signal(SIGINT, shutdown);
@@ -54,31 +54,31 @@ void msgLoop(const int PREV_READ_PIPE, const int NEXT_WRITE_PIPE) {
 
     while (1)
     {
-        msgLen = read(PREV_READ_PIPE, msg, MAX_MSG_LEN);
-        if (msgLen == -1) {
+        msg_len = read(PREV_READ_PIPE, msg, MAX_MSG_LEN);
+        if (msg_len == -1) {
             perror("Read failed, previous node dead or detached, exiting...\n");
             shutdown();
         }
         
-        if (msgLen < sizeof(int) || msg->recipientId < 0 || msg->recipientId > MAX_NODES) {
-            printf("Node %d: Malformed or partial message, ignoring...\n", nodeId);
+        if (msg_len < sizeof(int) || msg->recipient_id < 0 || msg->recipient_id > MAX_NODES) {
+            printf("Node %d: Malformed or partial message, ignoring...\n", node_id);
             continue;
         }
         
         // Check if msg is for this node
-        if (nodeId == msg->recipientId) {
-            printf("Node %d (PID: %d) received: %s\n", nodeId, pid, msg->content);
-            msg->recipientId = 0;
+        if (node_id == msg->recipient_id) {
+            printf("Node %d (PID: %d) received: %s\n", node_id, pid, msg->content);
+            msg->recipient_id = 0;
         }
 
         // we always pass the message on to the next node (even if it was destined for this one)
-        printf("Node %d (PID: %d) passing message (addressed to node %d).\n", nodeId, pid, msg->recipientId);
+        printf("Node %d (PID: %d) passing message (addressed to node %d).\n", node_id, pid, msg->recipient_id);
         
         write(NEXT_WRITE_PIPE, msg, MAX_MSG_LEN);
     };
 };
 
-void inputLoop(const int PREV_READ_PIPE, const int NEXT_WRITE_PIPE, int k_nodes) {
+void input_loop(const int PREV_READ_PIPE, const int NEXT_WRITE_PIPE, int k_nodes) {
     struct Message *msg = malloc(sizeof(struct Message));
 
     if (msg == NULL) {
@@ -99,7 +99,7 @@ void inputLoop(const int PREV_READ_PIPE, const int NEXT_WRITE_PIPE, int k_nodes)
     // we send a message and wait for it to come back
     // so we know every node has been initialized
     printf("Node 0 (PID: %d) sending initial message\n", getpid());
-    msg->recipientId = 0;
+    msg->recipient_id = 0;
     write(NEXT_WRITE_PIPE, msg, MAX_MSG_LEN);
     read(PREV_READ_PIPE, msg, MAX_MSG_LEN);
     
@@ -110,7 +110,7 @@ void inputLoop(const int PREV_READ_PIPE, const int NEXT_WRITE_PIPE, int k_nodes)
             break;
         }
 
-        switch (sscanf(buffer, "%d %[^\n]", &msg->recipientId, msg->content))
+        switch (sscanf(buffer, "%d %[^\n]", &msg->recipient_id, msg->content))
         {
         case 0:
             printf("Invalid message, use [ID] [MSG]\n");
@@ -122,7 +122,7 @@ void inputLoop(const int PREV_READ_PIPE, const int NEXT_WRITE_PIPE, int k_nodes)
             break;
         }
         
-        if (msg->recipientId < 1 || msg->recipientId > k_nodes) {
+        if (msg->recipient_id < 1 || msg->recipient_id > k_nodes) {
             printf("Bad ID value, please choose a value between 1-%d\n", k_nodes);
             continue;
         }
@@ -134,55 +134,55 @@ void inputLoop(const int PREV_READ_PIPE, const int NEXT_WRITE_PIPE, int k_nodes)
     free(buffer);
 }
 
-void initNode(int k, int id, const int PREV_READ_PIPE, const int HEAD_WRITER) {
+void init_node(int k, int id, const int PREV_READ_PIPE, const int HEAD_WRITER) {
     // Init new pipe
-    int nodePipe[2];
-    if (pipe(nodePipe) == -1) {
+    int node_pipe[2];
+    if (pipe(node_pipe) == -1) {
         perror("Init pipe failure!\n");
         exit(1);
     }
 
-    nodeId = id;
+    node_id = id;
 
-    printf("Node %d (PID: %d) initialized. Read pipe: %d, Write pipe: %d\n", id, getpid(), PREV_READ_PIPE, nodePipe[1]);
+    printf("Node %d (PID: %d) initialized. Read pipe: %d, Write pipe: %d\n", id, getpid(), PREV_READ_PIPE, node_pipe[1]);
     // Check if this is the last node in the ring, N(k)
     if (k == id) {
         //printf("REMEMBER: read & write pipes should always be 3 apart. This is normal.\n");
         printf("Node %d (PID: %d) is the kth node, looping pipe to head: %d\n", id, getpid(), HEAD_WRITER);
-        close(nodePipe[1]);
-        msgLoop(PREV_READ_PIPE, HEAD_WRITER);
+        close(node_pipe[1]);
+        msg_loop(PREV_READ_PIPE, HEAD_WRITER);
     // Else Create N(id + 1)
     } else {
-        nextNode = fork();
+        next_node = fork();
 
-        if (nextNode == -1) {
+        if (next_node == -1) {
             perror("Fork failed!\n");
             exit(1);
-        } else if (nextNode == 0) {
+        } else if (next_node == 0) {
             // Child recursively starts as next node
-            initNode(k, id + 1, nodePipe[0], HEAD_WRITER);
+            init_node(k, id + 1, node_pipe[0], HEAD_WRITER);
         }
         
-        if (nodeId) {
-            msgLoop(PREV_READ_PIPE, nodePipe[1]);
+        if (node_id) {
+            msg_loop(PREV_READ_PIPE, node_pipe[1]);
         } else { // node 0 handles user input
-            inputLoop(PREV_READ_PIPE, nodePipe[1], k);
+            input_loop(PREV_READ_PIPE, node_pipe[1], k);
         }
     }
 };
 
 
-void initRing(int k) {
+void init_ring(int k) {
     // Init pipe
-    int nodePipe[2];
-    if (pipe(nodePipe) == -1) {
+    int node_pipe[2];
+    if (pipe(node_pipe) == -1) {
         perror("Init pipe failure!\n");
         exit(1);
     }
-    const int HEAD_READER = nodePipe[0];
-    const int HEAD_WRITER = nodePipe[1];
+    const int HEAD_READER = node_pipe[0];
+    const int HEAD_WRITER = node_pipe[1];
 
-    initNode(k, 0, HEAD_READER, HEAD_WRITER);
+    init_node(k, 0, HEAD_READER, HEAD_WRITER);
 };
 
 int main(int argc, char *argv[]) {
@@ -198,5 +198,5 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    initRing(nodes);
+    init_ring(nodes);
 }
