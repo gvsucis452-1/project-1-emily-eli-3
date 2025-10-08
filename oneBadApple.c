@@ -104,7 +104,7 @@ void input_loop(const int PREV_READ_PIPE, const int NEXT_WRITE_PIPE, int k_nodes
     read(PREV_READ_PIPE, msg, MAX_MSG_LEN);
     
     while (1) {
-        printf("Enter message as [ID][MSG]:\n> ");
+        printf("Enter message as [ID] [MSG]:\n> ");
         if (fgets(buffer, MAX_MSG_LEN, stdin) == NULL) {
             printf("Failed buffer write. Exiting.\n");
             break;
