@@ -61,18 +61,19 @@ void msgLoop(const int PREV_READ_PIPE, const int NEXT_WRITE_PIPE) {
         }
         
         if (msgLen < sizeof(int) || msg->recipientId < 0 || msg->recipientId > MAX_NODES) {
-            printf("Node %d (PID: %d): Malformed or partial message, ignoring...\n", nodeId, pid);
+            printf("Node %d: Malformed or partial message, ignoring...\n", nodeId);
             continue;
         }
         
         // Check if msg is for this node
         if (nodeId == msg->recipientId) {
-            printf("Message at Node %d (PID: %d) received: %s\n", nodeId, pid, msg->content);
+            printf("Node %d (PID: %d) received: %s\n", nodeId, pid, msg->content);
             msg->recipientId = 0;
         }
 
-        // we always pass the message on to the next node (even if it's destined for this one)
-        printf("Node %d (PID: %d) passing message addressed to node %d.\n", nodeId, pid, msg->recipientId);
+        // we always pass the message on to the next node (even if it was destined for this one)
+        printf("Node %d (PID: %d) passing message (addressed to node %d).\n", nodeId, pid, msg->recipientId);
+        
         write(NEXT_WRITE_PIPE, msg, MAX_MSG_LEN);
     };
 };
@@ -97,12 +98,13 @@ void inputLoop(const int PREV_READ_PIPE, const int NEXT_WRITE_PIPE, int k_nodes)
     // after initializing the node ring,
     // we send a message and wait for it to come back
     // so we know every node has been initialized
+    printf("Node 0 (PID: %d) sending initial message\n", getpid());
     msg->recipientId = 0;
     write(NEXT_WRITE_PIPE, msg, MAX_MSG_LEN);
     read(PREV_READ_PIPE, msg, MAX_MSG_LEN);
     
     while (1) {
-        printf("Enter message as [ID][MSG]:\n>");
+        printf("Enter message as [ID][MSG]:\n> ");
         if (fgets(buffer, MAX_MSG_LEN, stdin) == NULL) {
             printf("Failed buffer write. Exiting.\n");
             break;
@@ -111,7 +113,7 @@ void inputLoop(const int PREV_READ_PIPE, const int NEXT_WRITE_PIPE, int k_nodes)
         switch (sscanf(buffer, "%d %[^\n]", &msg->recipientId, msg->content))
         {
         case 0:
-            printf("Invalid message, use [ID][MSG]\n");
+            printf("Invalid message, use [ID] [MSG]\n");
             continue;
         case 1:
             printf("Please include both [ID] & [MSG]\n");
