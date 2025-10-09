@@ -34,14 +34,14 @@ struct Message {
 
 void shutdown(int sig) {
     if (sig == SIGINT && node_id == 0) {
+        printf("\nNode %d (PID: %d) Shutting down...\n", node_id, getpid());
         kill(next_node, SIGUSR1);
         free(buffer);
-        printf("\nNode %d (PID: %d) Shutting down...\n", node_id, getpid());
     } else if (sig == SIGUSR1) {
+        printf("Node %d (PID: %d) Shutting down...\n", node_id, getpid());
         if (next_node != 0) {
             kill(next_node, SIGUSR1);
         } 
-        printf("Node %d (PID: %d) Shutting down...\n", node_id, getpid());
     } else {
         return;
     }
