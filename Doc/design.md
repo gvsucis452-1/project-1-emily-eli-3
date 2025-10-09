@@ -6,14 +6,16 @@ Each node in the ring except the first is a separate, identical process that rec
 
 Nodes may only send **one** per message recieved. But any number of diagnostic logs may be written by any node at any time to stdo.
 
-On Ctrl+C a graceful shutdown will initiate. A shutdown message is sent to the next node before shutting down.
+On Ctrl+C a graceful shutdown will initiate. Each node will send a signal to the next node before shutting down.
 ```
 Example Shutdown Order, k=3:
 [N0] -kill-> [N1]
 [N1] -kill-> [N2]
 [N2] -kill-> [N3]
-[N3] -kill-> [N0]
 ```
+
+## Example Usage
+![Example Usage](/img/example.png)
 
 ## Data Architecture & Specification
 
@@ -23,5 +25,3 @@ Example Shutdown Order, k=3:
 ![Pass Message Diagram](/img/ouroborosMessengerCommunicationDiagram-Pass%20Message.drawio.png)
 ### Check Message
 ![Check Message Diagram](/img/ouroborosMessengerCommunicationDiagram-Message.drawio.png)
-### Example Usage
-![Example Usage](/img/example.png)

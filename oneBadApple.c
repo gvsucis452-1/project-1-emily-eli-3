@@ -37,7 +37,7 @@ void shutdown(int sig) {
         kill(next_node, SIGUSR1);
         free(buffer);
         printf("\nNode %d (PID: %d) Shutting down...\n", node_id, getpid());
-    } else if (sig == SIGUSR1 && next_node != 0) {
+    } else if (sig == SIGUSR1) {
         if (next_node != 0) {
             kill(next_node, SIGUSR1);
         } 
@@ -90,7 +90,6 @@ void msg_loop(const int PREV_READ_PIPE, const int NEXT_WRITE_PIPE) {
 };
 
 void input_loop(const int PREV_READ_PIPE, const int NEXT_WRITE_PIPE, int k_nodes) {
-    pid_t pid = getpid();
     struct Message *msg = malloc(sizeof(struct Message));
 
     if (msg == NULL) {
