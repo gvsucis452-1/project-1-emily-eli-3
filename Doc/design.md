@@ -1,9 +1,8 @@
 # Project1 - Ouroboros Messenger
 Elijah Morgan & Emily Heyboer
 
-A process communication system, based on a one-way, circular, linked-list. /
-Each node of the list is a seperate but identical process.
-The HEAD/TAIL node (`n_0`) is the only node that can recieve user input.
+Our project is a process communication system, based on a one-way, circular, linked-list. /
+Each node in the ring except the first is a separate, identical process that recieves messages from the previous node and passes them on to the next. The first node in the ring, node 0, accepts messages from the user and passes them on to the rest of the ring.
 
 Nodes may only send **one** per message recieved. But any number of diagnostic logs may be written by any node at any time to stdo.
 
@@ -24,4 +23,5 @@ Example Shutdown Order, k=3:
 ![Pass Message Diagram](/img/ouroborosMessengerCommunicationDiagram-Pass%20Message.drawio.png)
 ### Check Message
 ![Check Message Diagram](/img/ouroborosMessengerCommunicationDiagram-Message.drawio.png)
-
+### Example Usage
+![Example Usage](/img/example.png)
