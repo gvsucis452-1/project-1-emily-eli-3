@@ -20,6 +20,8 @@ byte  |     definition
 0-3   |     INT - Recipient Node ID
 4-1024|     PTR - Message ptr
 ==========================================================*/
+
+// zk Are these global solely so that shutdown can access them? 
 pid_t next_node;
 int node_id;
 struct Message *msg;
@@ -53,6 +55,7 @@ void shutdown(int sig) {
 }
 
 void msg_loop(const int PREV_READ_PIPE, const int NEXT_WRITE_PIPE) {
+    printf("Entring msg loop\n");
     msg = malloc(sizeof(struct Message));
     ssize_t msg_len;
     const pid_t pid = getpid();
